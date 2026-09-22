@@ -1,0 +1,58 @@
+name: Run EV Stations scripts
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which script to run (matches ci_runner.py targets)"
+        required: true
+        default: "wa_pct"
+        type: choice
+        options:
+          - wa_pct
+          - wa_mkt_share
+          - nc
+          - ny
+          - md
+          - ca
+          - combined
+          - ev_stations
+  schedule:
+    # Every Monday at 09:00 UTC. Adjust or remove once you've confirmed it works.
+    - cron: "0 9 * * 1"
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    env:
+      # Map GitHub Secrets -> environment variables your scripts read via os.environ.
+      # Add a secret in Settings -> Secrets and variables -> Actions for each you need.
+      NREL_API_KEY: ${{ secrets.NREL_API_KEY }}
+      CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
+      EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          # 'cif' is unused dead weight removed from the scripts already;
+          # only add it back here if a script you're running still needs it:
+          # SETUPTOOLS_USE_DISTUTILS=stdlib pip install cif
+
+      - name: Run script
+        run: |
+          python ci/ci_runner.py "${{ github.event.inputs.target || 'wa_pct' }}"
+
+      - name: Upload outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ev-outputs-${{ github.run_number }}
+          path: ci_output/
+          if-no-files-found: warn

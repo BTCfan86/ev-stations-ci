@@ -1,0 +1,9 @@
+pandas
+requests
+matplotlib
+geopy
+openpyxl
+basemap
+basemap-data-hires
+pyproj
+pyshp

@@ -1,0 +1,12 @@
+# Never commit the real key file - use GitHub Actions Secrets instead
+Set_API_KEYs_real.py
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Outputs
+ci_output/
+JSON_Archives/
+Historical/
