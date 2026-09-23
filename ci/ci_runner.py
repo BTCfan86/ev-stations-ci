@@ -77,7 +77,7 @@ def main():
 
     elif target == "md":
         from Renewables.EV_Data.MD_EVs_v01 import MD_Monthly_EVs
-        MD_Monthly_EVs()  # currently just prints - see note in project review
+        _write_result("md", MD_Monthly_EVs())
 
     elif target == "ca":
         from Renewables.EV_Data.CA_EVs_v01 import CA_Monthly_EVs
