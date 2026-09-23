@@ -14,6 +14,7 @@ on:
           - nc
           - ny
           - md
+          - md_pct
           - ca
           - combined
           - ev_stations
