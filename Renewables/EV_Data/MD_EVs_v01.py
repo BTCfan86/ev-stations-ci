@@ -46,19 +46,44 @@ def MD_Monthly_EVs():
 
 
 def MD_Monthly_Total():
-    URL = 'https://opendata.maryland.gov/resource/db8v-9ewn.json?' + '&$limit=' + '1000'
+    # FIX: same missing-return bug as MD_Monthly_EVs() - only ever printed.
+    # FIX: $limit=1000 was close to truncating (verified live: 1,100 rows
+    # total), raised to match.
+    #
+    # NOTE: this dataset ("MVA Vehicle Registrations by County as of Each
+    # Month End") only starts January 2023, while the EV dataset above goes
+    # back to July 2020 - they don't cover the same range. MD_EV_Pct() below
+    # only computes percent_EVs for the months both datasets actually cover.
+    URL = 'https://opendata.maryland.gov/resource/db8v-9ewn.json?$limit=50000'
     data = requests.get(URL).json()
     df = pd.json_normalize(data)
-    print(df)
+    df['year_month'] = pd.to_datetime(df['year_month'], format='%Y/%m').dt.strftime("%Y-%m-%d")
+    df['vehicle_count'] = df['vehicle_count'].astype(int)
+    monthly_total = df.groupby('year_month')['vehicle_count'].sum()
+    monthly_total.name = 'Total_Vehicles'
+    return monthly_total
+
+
+def MD_EV_Pct():
+    # Combines the EV counts (BEV/PHEV/EV_Total, from July 2020) with MD's
+    # separately-published total-vehicle-registrations dataset (from January
+    # 2023) to compute percent_EVs, the way WA_EV_Pct() does for Washington.
+    # An inner join means only months present in BOTH datasets are kept -
+    # i.e. this starts at whichever dataset's start date is later (currently
+    # January 2023), not July 2020.
+    ev = MD_Monthly_EVs()
+    total = MD_Monthly_Total()
+    combined = ev.T.join(total, how='inner')
+    combined['percent_EVs'] = (combined['EV_Total'] / combined['Total_Vehicles']).round(4)
+    return combined.T
 
 
 def main():
     print("MD Monthly Total EVs running as main")
     timestr = datetime.now().strftime("%m-%d-%y")
     filename = "MD Monthly Total EVs " + timestr + ".txt"
-    result = MD_Monthly_EVs()
+    result = MD_EV_Pct()
     print(result)
-    # MD_Monthly_Total()
 
 if __name__ == "__main__":
     main()
