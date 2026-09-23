@@ -6,6 +6,7 @@ CI entry point. Usage (from repo root):
     python ci/ci_runner.py nc
     python ci/ci_runner.py ny
     python ci/ci_runner.py md
+    python ci/ci_runner.py md_pct
     python ci/ci_runner.py ca
     python ci/ci_runner.py combined
 
@@ -78,6 +79,10 @@ def main():
     elif target == "md":
         from Renewables.EV_Data.MD_EVs_v01 import MD_Monthly_EVs
         _write_result("md", MD_Monthly_EVs())
+
+    elif target == "md_pct":
+        from Renewables.EV_Data.MD_EVs_v01 import MD_EV_Pct
+        _write_result("md_pct", MD_EV_Pct())
 
     elif target == "ca":
         from Renewables.EV_Data.CA_EVs_v01 import CA_Monthly_EVs
