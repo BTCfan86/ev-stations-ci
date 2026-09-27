@@ -51,46 +51,53 @@ def WA_EV_Pct():
     # print(df_total)
     return df_total
 
+
+def _soda_query_wa_mkt(select, where, group, order, limit=50000):
+    """One request to WA's Socrata (SODA) API, doing the aggregation server-side."""
+    url = 'https://data.wa.gov/resource/rpr4-cgyd.json'
+    params = {
+        '$select': select,
+        '$where': where,
+        '$group': group,
+        '$order': order,
+        '$limit': str(limit),
+    }
+    resp = requests.get(url, params=params)
+    resp.raise_for_status()
+    return resp.json()
+
+
 def WA_EV_Mkt_Share():
-    URL = 'https://data.wa.gov/resource/rpr4-cgyd.json?' + '&vehicle_primary_use=' + 'Passenger' + '&$limit=' + '10000'
-    data = requests.get(URL).json()
-    df = pd.json_normalize(data)
-    df = df.drop(['county', 'city', 'state_of_residence', 'zip', 'meets_2019_hb_2042_sale_price_value_requirement', '_2019_hb_2042_sale_price_value_requirement', 'electric_vehicle_fee_paid',
-                  'transportation_electrification_fee_paid', 'hybrid_vehicle_electrification_fee_paid', 'census_tract_2020', 'legislative_district', 'electric_range', 'base_msrp', 'transaction_year',
-                  'electric_utility', 'vin_1_10', 'odometer_code', 'vehicle_primary_use', 'odometer_reading', 'sale_price', 'new_or_used_vehicle'], axis=1)
-    # The VINs included above are not the whole VIN, just the first 10 digits.  So, need to use the DOL numbers instead
+    # FIX: two real bugs here, both verified live.
+    # (1) $limit=10000 against a dataset with ~1.9 million rows, with no
+    # $order specified - only ~0.5% of the data was ever being pulled, and
+    # which slice you got was arbitrary (whatever order Socrata felt like
+    # returning rows in).
+    # (2) df.drop([...'base_msrp'...]) referenced a column that does not
+    # exist anywhere in this dataset (checked against its actual 33 fields) -
+    # this raised a KeyError and crashed the script outright, which is what
+    # you just hit.
+    #
+    # Rather than pulling ~1.9M individual vehicle records just to count them
+    # in pandas, this asks Socrata to do the monthly-count-by-make
+    # aggregation server-side (same approach used for NY_EVs_v01.py), so only
+    # the aggregated result (a few thousand rows at most) comes back.
+    where = ("vehicle_primary_use='Passenger' and transaction_type in"
+             "('Original Registration','Registration Renewal')")
+    rows = _soda_query_wa_mkt(
+        select="date_trunc_ym(transaction_date) as reg_month, make, count(*) as cnt",
+        where=where,
+        group="date_trunc_ym(transaction_date), make",
+        order="reg_month",
+    )
+    df = pd.DataFrame(rows)
+    df['cnt'] = df['cnt'].astype(int)
+    df['reg_month'] = pd.to_datetime(df['reg_month']).dt.strftime('%Y-%m-%d')
 
-    reg_types = ['Original Registration', 'Registration Renewal']
-    df = df[df['transaction_type'].isin(reg_types)].reset_index().drop('index', axis=1)
-    df['transaction_date'] = pd.to_datetime(df['transaction_date']).dt.strftime("%Y-%m-%d")
-    df['date_of_vehicle_sale'] = pd.to_datetime(df['date_of_vehicle_sale']).dt.strftime("%Y-%m-%d")
-    df = df.sort_values(by='transaction_date', ascending=True).reset_index().drop('index', axis=1)
-    df['reg_month'] = pd.to_datetime(df['transaction_date']).dt.to_period('M').astype(str)
-    df['reg_month'] = pd.to_datetime(df['reg_month']).dt.strftime("%Y-%m-%d")  # Change dates to better format
-    months = df['reg_month'].unique()  # Returns unique months
+    df_total_make = df.pivot_table(index='make', columns='reg_month', values='cnt', aggfunc='sum', fill_value=0)
+    df_total_make = df_total_make.loc[df_total_make.sum(axis=1).sort_values(ascending=False).head(15).index]  # Only include 15 largest brands
 
-    # Create total DF of car brands
-    total_make = df['make'].value_counts()
-    df_total_make = pd.DataFrame([total_make]).T  # .T at the end is for transpose
-    df_total_make['Total'] = df_total_make['count'].astype(int)
-    df_total_make = df_total_make.drop('count', axis=1)
-
-    for m in months:
-        df_month = df[df.reg_month == m].reset_index().drop('index', axis=1)
-        s_make = df_month.make.value_counts()
-        df_make = pd.DataFrame([s_make]).T
-        df_make[m] = df_make['count'].astype(int)
-        df_make = df_make.drop('count', axis=1)
-        df_total_make = df_total_make.join(df_make)
-        df_total_make[m] = df_total_make[m].fillna(0)
-
-    df_total_make = df_total_make.head(15)  # Only include 15 largest brands
-    df_total_make = df_total_make.drop('Total', axis=1)
-
-    df_total_make_pct = df_total_make
-    cols = df_total_make_pct.columns.tolist()
-    for c in cols:
-        df_total_make_pct[c] = round((df_total_make_pct[c] / df_total_make_pct[c].sum()), 4)
+    df_total_make_pct = df_total_make.div(df_total_make.sum(axis=0), axis=1).round(4)
 
     # print(df_total_make_pct)
     return df_total_make_pct
