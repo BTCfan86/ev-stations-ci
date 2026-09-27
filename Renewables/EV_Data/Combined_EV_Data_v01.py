@@ -47,6 +47,18 @@ def combined_EV_share():
     # manufacturer share is now index [1].
     NY_brands = NY_EV_return[1].iloc[:, :-1]  # the last argument in this row drops the last column b/c it's a partial month of data
 
+    # FIX: WA's make names come back ALL CAPS ('TESLA'), but NY's come back
+    # Title Case ('Tesla') - confirmed live (see ny_1.csv vs wa_mkt_share.csv).
+    # brands_to_keep=['TESLA'] matched WA's index but not NY's, so
+    # NY_brands.loc[brands_to_keep] raised "None of ['TESLA'] are in the
+    # [index]" - this is exactly the bug the original comment on
+    # brands_to_keep was warning about ("Need to conform the names of brands
+    # in the source files"), just never actually fixed. Uppercasing both
+    # indexes before filtering makes the match reliable regardless of which
+    # casing convention a given state's data uses.
+    WA_brands.index = WA_brands.index.str.upper()
+    NY_brands.index = NY_brands.index.str.upper()
+
     WA_brands = WA_brands.loc[brands_to_keep]
     NY_brands = NY_brands.loc[brands_to_keep]
 
